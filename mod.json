@@ -1,0 +1,44 @@
+{
+	"geode": "4.0.0",
+	"gd": {
+		"win": "2.2074",
+		"android": "2.2074",
+		"mac": "2.2074",
+		"ios": "2.2074"
+	},
+	"id": "user.stable-spam",
+	"name": "Stable Spam",
+	"version": "v1.0.0",
+	"developer": "PalomoPaloMano",
+	"description": "Detecta cuando haces spam y lo convierte en un spam estable (~100 CPS).",
+	"settings": {
+		"cps": {
+			"type": "int",
+			"name": "CPS objetivo",
+			"default": 100,
+			"min": 1,
+			"max": 240
+		},
+		"threshold": {
+			"type": "int",
+			"name": "Clicks para detectar spam",
+			"default": 5,
+			"min": 2,
+			"max": 20
+		},
+		"window": {
+			"type": "float",
+			"name": "Ventana de detección (s)",
+			"default": 0.5,
+			"min": 0.1,
+			"max": 2.0
+		},
+		"timeout": {
+			"type": "float",
+			"name": "Tiempo para parar (s)",
+			"default": 0.25,
+			"min": 0.1,
+			"max": 1.0
+		}
+	}
+}
