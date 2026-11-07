@@ -1,9 +1,12 @@
- #include <Geode/Geode.hpp>
+#include <Geode/Geode.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
+#include <Geode/modify/UILayer.hpp>
 #include <chrono>
 #include <deque>
 
 using namespace geode::prelude;
+
+static bool g_ckOn = true;
 
 static double nowSec() {
 	using namespace std::chrono;
@@ -33,6 +36,13 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		GJBaseGameLayer::handleButton(h, 1, f->p1);
 	}
 
+	bool wantsUp(PlayerObject* pl, double look) {
+		auto f = m_fields.self();
+		double sgn = pl->m_isUpsideDown ? -1.0 : 1.0;
+		double e = f->targetY - pl->getPositionY();
+		return (e - pl->m_yVelocity * look) * sgn > 0.0;
+	}
+
 	void stopSpam() {
 		auto f = m_fields.self();
 		this->setHeld(false);
@@ -45,6 +55,12 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		auto f = m_fields.self();
 
 		if (button != 1 || !PlayLayer::get()) {
+			return GJBaseGameLayer::handleButton(down, button, isPlayer1);
+		}
+
+		// Mod apagado con la bolita CK
+		if (!g_ckOn) {
+			if (f->mode != 0) this->stopSpam();
 			return GJBaseGameLayer::handleButton(down, button, isPlayer1);
 		}
 
@@ -104,7 +120,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		if (f->mode != 0) {
 			double now = nowSec();
 			auto pl = this->spamPlayer();
-			bool stop = !PlayLayer::get();
+			bool stop = !PlayLayer::get() || !g_ckOn;
 
 			if (f->mode == 1) {
 				auto timeout = Mod::get()->getSettingValue<double>("timeout");
@@ -114,22 +130,24 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 
 			if (stop) {
 				this->stopSpam();
+			} else if (f->mode == 2) {
+				// Straight fly: decide en cada tick para ir recto
+				auto flylook = Mod::get()->getSettingValue<double>("flylook");
+				this->setHeld(this->wantsUp(pl, flylook));
 			} else {
 				auto cps = (double)Mod::get()->getSettingValue<int64_t>("cps");
 				auto stabilize = Mod::get()->getSettingValue<bool>("stabilize");
 				auto look = Mod::get()->getSettingValue<double>("lookahead");
 				double half = 0.5 / cps;
-				bool control = (f->mode == 2) || (stabilize && pl && pl->m_isShip);
+				bool control = stabilize && pl && pl->m_isShip;
 
 				f->acc += dt;
 				while (f->acc >= half) {
 					f->acc -= half;
-					if (control && pl) {
-						double sgn = pl->m_isUpsideDown ? -1.0 : 1.0;
-						double err = (f->targetY - pl->getPositionY()) * sgn
-							- pl->m_yVelocity * look;
-						this->setHeld(err > 0.0);
+					if (control) {
+						this->setHeld(this->wantsUp(pl, look));
 					} else {
+						// wave / cubo / etc: alterna -> zigzag estable
 						this->setHeld(!f->held);
 					}
 				}
@@ -137,5 +155,61 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		}
 
 		GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
+	}
+};
+
+class $modify(CKUILayer, UILayer) {
+	struct Fields {
+		CCDrawNode* dot = nullptr;
+	};
+
+	void refreshCK() {
+		auto f = m_fields.self();
+		if (!f->dot) return;
+		f->dot->clear();
+		ccColor4F ring = g_ckOn ? ccColor4F{0.f, 0.9f, 1.f, 1.f}
+		                        : ccColor4F{0.5f, 0.5f, 0.5f, 1.f};
+		ccColor4F fill = g_ckOn ? ccColor4F{0.1f, 0.1f, 0.4f, 0.95f}
+		                        : ccColor4F{0.15f, 0.15f, 0.15f, 0.95f};
+		f->dot->drawDot({0.f, 0.f}, 20.f, ring);
+		f->dot->drawDot({0.f, 0.f}, 17.f, fill);
+	}
+
+	void onCK(CCObject*) {
+		g_ckOn = !g_ckOn;
+		this->refreshCK();
+	}
+
+	bool init(GJBaseGameLayer* layer) {
+		if (!UILayer::init(layer)) return false;
+		if (!typeinfo_cast<PlayLayer*>(layer)) return true;
+
+		auto f = m_fields.self();
+		auto win = CCDirector::get()->getWinSize();
+
+		auto node = CCNode::create();
+		node->setContentSize({40.f, 40.f});
+
+		f->dot = CCDrawNode::create();
+		f->dot->setPosition({20.f, 20.f});
+		node->addChild(f->dot);
+
+		auto lbl = CCLabelBMFont::create("CK", "bigFont.fnt");
+		lbl->setScale(0.45f);
+		lbl->setPosition({20.f, 20.f});
+		node->addChild(lbl);
+
+		auto btn = CCMenuItemSpriteExtra::create(
+			node, this, menu_selector(CKUILayer::onCK)
+		);
+		btn->setPosition({win.width - 30.f, win.height - 130.f});
+
+		auto menu = CCMenu::create();
+		menu->setPosition({0.f, 0.f});
+		menu->addChild(btn);
+		this->addChild(menu, 100);
+
+		this->refreshCK();
+		return true;
 	}
 };
