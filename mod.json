@@ -8,17 +8,25 @@
 	},
 	"id": "palomopalomano.stable-spam",
 	"name": "Stable Spam",
-	"version": "v1.3.0",
+	"version": "v1.4.0",
 	"developer": "PalomoPaloMano",
 	"description": "Spam estable a ~100 CPS y Straight Fly para la nave.",
 	"settings": {
 		"cps": {
 			"type": "int",
 			"name": "CPS objetivo",
-			"description": "Clicks por segundo cuando el spam está activo.",
+			"description": "Clicks por segundo cuando el spam está activo (cubo, etc).",
 			"default": 100,
 			"min": 1,
 			"max": 240
+		},
+		"waveticks": {
+			"type": "int",
+			"name": "Ticks por zigzag (wave)",
+			"description": "1 = línea lo más fina posible. Súbelo para hacerla más ancha.",
+			"default": 1,
+			"min": 1,
+			"max": 8
 		},
 		"straightfly": {
 			"type": "bool",
