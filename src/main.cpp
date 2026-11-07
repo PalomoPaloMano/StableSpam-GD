@@ -66,7 +66,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		GJBaseGameLayer::handleButton(down, button, isPlayer1);
 	}
 
-	void processCommands(float dt) {
+	void processCommands(float dt, bool isHalfTick, bool isLastTick) {
 		auto f = m_fields.self();
 
 		if (f->active) {
@@ -88,6 +88,6 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 			}
 		}
 
-		GJBaseGameLayer::processCommands(dt);
+		GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
 	}
 };
