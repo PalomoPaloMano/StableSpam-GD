@@ -137,6 +137,7 @@ public:
         this->setContentSize({50.f, 50.f});
         this->setAnchorPoint({0.5f, 0.5f});
 
+        // Dibujo de la bolita
         auto dot = CCDrawNode::create();
         dot->setPosition({25.f, 25.f});
         dot->drawDot({0.f, 0.f}, 22.f, {0.f, 0.95f, 1.f, 1.f});
@@ -149,57 +150,65 @@ public:
         lbl->setColor({0, 255, 255});
         this->addChild(lbl);
 
-        auto btn = CCMenuItemSpriteExtra::create(
-            CCNode::create(),
-            target, callback
-        );
-        btn->setContentSize({50.f, 50.f});
-        btn->setPosition({25.f, 25.f});
+        m_target = target;
+        m_callback = callback;
 
-        auto menu = CCMenu::create();
-        menu->setPosition({0.f, 0.f});
-        menu->addChild(btn);
-        this->addChild(menu);
+        // Listener de toques moderno
+        auto listener = EventListenerTouchOneByOne::create();
+        listener->setSwallowTouches(true);
 
-        this->setTouchEnabled(true);
-        this->setTouchMode(kCCTouchesOneByOne);
+        listener->onTouchBegan = [this](CCTouch* touch, CCEvent*) -> bool {
+            auto pos = this->convertToNodeSpace(touch->getLocation());
+            auto size = this->getContentSize();
 
-        m_dragging = false;
+            if (pos.x >= 0 && pos.x <= size.width && pos.y >= 0 && pos.y <= size.height) {
+                m_dragging = false;
+                m_startPos = touch->getLocation();
+                m_lastPos = m_startPos;
+                return true;
+            }
+            return false;
+        };
+
+        listener->onTouchMoved = [this](CCTouch* touch, CCEvent*) {
+            auto current = touch->getLocation();
+            auto diff = current - m_lastPos;
+
+            if (!m_dragging) {
+                auto totalDiff = current - m_startPos;
+                if (totalDiff.getLength() > 8.f) {
+                    m_dragging = true;
+                }
+            }
+
+            if (m_dragging) {
+                this->setPosition(this->getPosition() + diff);
+            }
+            m_lastPos = current;
+        };
+
+        listener->onTouchEnded = [this](CCTouch* touch, CCEvent*) {
+            if (!m_dragging && m_target && m_callback) {
+                (m_target->*m_callback)(nullptr);
+            }
+            m_dragging = false;
+        };
+
+        listener->onTouchCancelled = [this](CCTouch* touch, CCEvent*) {
+            m_dragging = false;
+        };
+
+        this->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, this);
+
         return true;
-    }
-
-    bool ccTouchBegan(CCTouch* touch, CCEvent* event) override {
-        auto pos = this->convertToNodeSpace(touch->getLocation());
-        auto size = this->getContentSize();
-
-        if (pos.x >= 0 && pos.x <= size.width && pos.y >= 0 && pos.y <= size.height) {
-            m_dragging = true;
-            m_lastPos = touch->getLocation();
-            return true;
-        }
-        return false;
-    }
-
-    void ccTouchMoved(CCTouch* touch, CCEvent* event) override {
-        if (!m_dragging) return;
-
-        auto current = touch->getLocation();
-        auto diff = current - m_lastPos;
-        this->setPosition(this->getPosition() + diff);
-        m_lastPos = current;
-    }
-
-    void ccTouchEnded(CCTouch* touch, CCEvent* event) override {
-        m_dragging = false;
-    }
-
-    void ccTouchCancelled(CCTouch* touch, CCEvent* event) override {
-        m_dragging = false;
     }
 
 private:
     bool m_dragging = false;
+    CCPoint m_startPos;
     CCPoint m_lastPos;
+    CCObject* m_target = nullptr;
+    SEL_MenuHandler m_callback = nullptr;
 };
 
 // ===================== MENÚ PRINCIPAL =====================
