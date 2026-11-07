@@ -1,4 +1,4 @@
-#include <Geode/Geode.hpp>
+ #include <Geode/Geode.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <chrono>
 #include <deque>
@@ -13,20 +13,30 @@ static double nowSec() {
 class $modify(SpamGJBGL, GJBaseGameLayer) {
 	struct Fields {
 		std::deque<double> clicks;
-		bool active = false;
+		int mode = 0; // 0 = apagado, 1 = spam, 2 = straight fly
 		bool held = false;
 		bool p1 = true;
 		double lastReal = 0.0;
 		double acc = 0.0;
+		double targetY = 0.0;
 	};
+
+	PlayerObject* spamPlayer() {
+		auto f = m_fields.self();
+		return f->p1 ? m_player1 : m_player2;
+	}
+
+	void setHeld(bool h) {
+		auto f = m_fields.self();
+		if (f->held == h) return;
+		f->held = h;
+		GJBaseGameLayer::handleButton(h, 1, f->p1);
+	}
 
 	void stopSpam() {
 		auto f = m_fields.self();
-		if (f->held) {
-			GJBaseGameLayer::handleButton(false, 1, f->p1);
-			f->held = false;
-		}
-		f->active = false;
+		this->setHeld(false);
+		f->mode = 0;
 		f->acc = 0.0;
 		f->clicks.clear();
 	}
@@ -40,11 +50,32 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 
 		double now = nowSec();
 
-		if (f->active) {
+		// Straight fly activo: soltar la pantalla lo termina
+		if (f->mode == 2) {
+			if (!down && isPlayer1 == f->p1) this->stopSpam();
+			return;
+		}
+
+		// Spam activo: tus toques solo lo mantienen vivo
+		if (f->mode == 1) {
 			f->lastReal = now;
 			return;
 		}
 
+		auto pl = isPlayer1 ? m_player1 : m_player2;
+
+		// Iniciar straight fly (solo nave)
+		if (down && pl && pl->m_isShip &&
+			Mod::get()->getSettingValue<bool>("straightfly")) {
+			f->mode = 2;
+			f->p1 = isPlayer1;
+			f->acc = 0.0;
+			f->held = false;
+			f->targetY = pl->getPositionY();
+			return;
+		}
+
+		// Detección de spam
 		if (down) {
 			auto window = Mod::get()->getSettingValue<double>("window");
 			auto threshold = Mod::get()->getSettingValue<int64_t>("threshold");
@@ -55,11 +86,12 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 			}
 
 			if ((int64_t)f->clicks.size() >= threshold) {
-				f->active = true;
+				f->mode = 1;
 				f->p1 = isPlayer1;
 				f->lastReal = now;
 				f->acc = 0.0;
 				f->held = false;
+				if (pl) f->targetY = pl->getPositionY();
 			}
 		}
 
@@ -69,21 +101,37 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 	void processCommands(float dt, bool isHalfTick, bool isLastTick) {
 		auto f = m_fields.self();
 
-		if (f->active) {
+		if (f->mode != 0) {
 			double now = nowSec();
-			auto timeout = Mod::get()->getSettingValue<double>("timeout");
+			auto pl = this->spamPlayer();
+			bool stop = !PlayLayer::get();
 
-			if (now - f->lastReal > timeout || !PlayLayer::get()) {
+			if (f->mode == 1) {
+				auto timeout = Mod::get()->getSettingValue<double>("timeout");
+				if (now - f->lastReal > timeout) stop = true;
+			}
+			if (f->mode == 2 && (!pl || !pl->m_isShip)) stop = true;
+
+			if (stop) {
 				this->stopSpam();
 			} else {
 				auto cps = (double)Mod::get()->getSettingValue<int64_t>("cps");
+				auto stabilize = Mod::get()->getSettingValue<bool>("stabilize");
+				auto look = Mod::get()->getSettingValue<double>("lookahead");
 				double half = 0.5 / cps;
+				bool control = (f->mode == 2) || (stabilize && pl && pl->m_isShip);
 
 				f->acc += dt;
 				while (f->acc >= half) {
 					f->acc -= half;
-					f->held = !f->held;
-					GJBaseGameLayer::handleButton(f->held, 1, f->p1);
+					if (control && pl) {
+						double sgn = pl->m_isUpsideDown ? -1.0 : 1.0;
+						double err = (f->targetY - pl->getPositionY()) * sgn
+							- pl->m_yVelocity * look;
+						this->setHeld(err > 0.0);
+					} else {
+						this->setHeld(!f->held);
+					}
 				}
 			}
 		}
