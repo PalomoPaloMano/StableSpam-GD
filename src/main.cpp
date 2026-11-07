@@ -1,20 +1,29 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/UILayer.hpp>
+#include <Geode/modify/MenuLayer.hpp>
+#include <Geode/modify/PlayerObject.hpp>
 #include <chrono>
 #include <deque>
 
 using namespace geode::prelude;
 
-static bool g_ckOn = true;
-static ccColor4B g_panelBgColor = {25, 25, 45, 235};
+// ===================== ESTADOS GLOBALES =====================
+static bool g_ckOn           = true;
+static bool g_enableSpam     = true;
+static bool g_enableStraight = true;
+static bool g_enableWave     = true;
+static bool g_enableSave     = false;
+
+static double g_lastSaveTime = 0.0;
+static const double SAVE_COOLDOWN = 1.5;
 
 static double nowSec() {
     using namespace std::chrono;
     return duration<double>(steady_clock::now().time_since_epoch()).count();
 }
 
-// ===================== PANEL =====================
+// ===================== PANEL CK =====================
 class CKPanel : public CCLayer {
 public:
     static CKPanel* create() {
@@ -35,134 +44,189 @@ public:
 
         auto win = CCDirector::get()->getWinSize();
 
-        // Fondo oscuro
-        auto dim = CCLayerColor::create({0, 0, 0, 170});
+        auto dim = CCLayerColor::create({0, 0, 0, 180});
         dim->setContentSize(win);
         this->addChild(dim);
 
-        // Panel
         auto panel = CCScale9Sprite::create("GJ_square02.png");
-        panel->setContentSize({300.f, 340.f});
+        panel->setContentSize({310.f, 380.f});
         panel->setPosition(win / 2);
-        panel->setColor({g_panelBgColor.r, g_panelBgColor.g, g_panelBgColor.b});
-        panel->setOpacity(g_panelBgColor.a);
+        panel->setColor({25, 25, 50});
+        panel->setOpacity(240);
         this->addChild(panel);
-        m_panel = panel;
 
-        // Título
-        auto title = CCLabelBMFont::create("Stable Spam", "bigFont.fnt");
-        title->setScale(0.5f);
-        title->setPosition({150.f, 300.f});
+        auto title = CCLabelBMFont::create("Stable Spam - CK", "bigFont.fnt");
+        title->setScale(0.48f);
+        title->setPosition({155.f, 340.f});
         panel->addChild(title);
 
-        // --- Apartado 1: On/Off ---
-        auto lab1 = CCLabelBMFont::create("1. Estado del mod", "goldFont.fnt");
-        lab1->setScale(0.38f);
-        lab1->setPosition({150.f, 255.f});
-        panel->addChild(lab1);
+        auto makeToggle = [&](const char* text, float y, bool* state, SEL_MenuHandler sel) {
+            auto lab = CCLabelBMFont::create(text, "goldFont.fnt");
+            lab->setScale(0.38f);
+            lab->setAnchorPoint({0.f, 0.5f});
+            lab->setPosition({35.f, y});
+            panel->addChild(lab);
 
-        auto onSpr = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
-        auto offSpr = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
-        auto toggle = CCMenuItemToggler::create(offSpr, onSpr, this, menu_selector(CKPanel::onToggle));
-        toggle->setPosition({150.f, 215.f});
-        toggle->toggle(g_ckOn);
-
-        // --- Apartado 2: Colores ---
-        auto lab2 = CCLabelBMFont::create("2. Color del panel", "goldFont.fnt");
-        lab2->setScale(0.38f);
-        lab2->setPosition({150.f, 170.f});
-        panel->addChild(lab2);
-
-        auto colorMenu = CCMenu::create();
-        colorMenu->setPosition({0.f, 0.f});
-
-        std::vector<ccColor3B> cols = {
-            {25, 25, 45}, {50, 20, 70}, {20, 45, 30},
-            {70, 20, 20}, {30, 30, 55}, {15, 15, 15}
+            auto on  = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
+            auto off = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
+            auto tog = CCMenuItemToggler::create(off, on, this, sel);
+            tog->setPosition({260.f, y});
+            tog->toggle(*state);
+            return tog;
         };
 
-        float x = 55.f;
-        for (size_t i = 0; i < cols.size(); ++i) {
-            auto spr = CCLayerColor::create(
-                {cols[i].r, cols[i].g, cols[i].b, 255}, 34.f, 34.f
-            );
-            auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(CKPanel::onColor));
-            btn->setTag(static_cast<int>(i));
-            btn->setPosition({x + i * 40.f, 125.f});
-            colorMenu->addChild(btn);
-        }
-        panel->addChild(colorMenu);
+        auto menu = CCMenu::create();
+        menu->setPosition({0.f, 0.f});
 
-        // --- Apartado 3 ---
-        auto lab3 = CCLabelBMFont::create("3. Info", "goldFont.fnt");
-        lab3->setScale(0.38f);
-        lab3->setPosition({150.f, 80.f});
-        panel->addChild(lab3);
+        menu->addChild(makeToggle("Mod activado",            290.f, &g_ckOn,           menu_selector(CKPanel::onToggleMain)));
+        menu->addChild(makeToggle("Spam estable",           245.f, &g_enableSpam,     menu_selector(CKPanel::onToggleSpam)));
+        menu->addChild(makeToggle("Straight Fly (nave)",    200.f, &g_enableStraight, menu_selector(CKPanel::onToggleStraight)));
+        menu->addChild(makeToggle("Spam Wave fino",         155.f, &g_enableWave,     menu_selector(CKPanel::onToggleWave)));
+        menu->addChild(makeToggle("Save Mode (anti-muerte)",110.f, &g_enableSave,     menu_selector(CKPanel::onToggleSave)));
 
         auto info = CCLabelBMFont::create(
-            "Spam estable + Straight Fly\nWave fina (ticks = 1)\nSolo practica",
+            "Save Mode: te salva si fallas\npor poco (cooldown 1.5s)\nSolo para practicar",
             "chatFont.fnt"
         );
-        info->setScale(0.5f);
+        info->setScale(0.48f);
         info->setAlignment(kCCTextAlignmentCenter);
-        info->setPosition({150.f, 45.f});
+        info->setPosition({155.f, 55.f});
         panel->addChild(info);
 
-        // Cerrar
         auto close = CCMenuItemSpriteExtra::create(
             CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png"),
             this, menu_selector(CKPanel::onClose)
         );
-        close->setPosition({270.f, 310.f});
-
-        auto menu = CCMenu::create();
-        menu->setPosition({0.f, 0.f});
-        menu->addChild(toggle);
+        close->setPosition({280.f, 350.f});
         menu->addChild(close);
-        panel->addChild(menu);
 
+        panel->addChild(menu);
         return true;
     }
 
-    void onToggle(CCObject*) {
-        g_ckOn = !g_ckOn;
-    }
-
-    void onColor(CCObject* sender) {
-        auto btn = static_cast<CCMenuItemSpriteExtra*>(sender);
-        int tag = btn->getTag();
-
-        std::vector<ccColor4B> cols = {
-            {25, 25, 45, 235}, {50, 20, 70, 235}, {20, 45, 30, 235},
-            {70, 20, 20, 235}, {30, 30, 55, 235}, {15, 15, 15, 235}
-        };
-
-        if (tag >= 0 && tag < (int)cols.size()) {
-            g_panelBgColor = cols[tag];
-            if (m_panel) {
-                m_panel->setColor({g_panelBgColor.r, g_panelBgColor.g, g_panelBgColor.b});
-                m_panel->setOpacity(g_panelBgColor.a);
-            }
-        }
-    }
+    void onToggleMain(CCObject*)     { g_ckOn = !g_ckOn; }
+    void onToggleSpam(CCObject*)     { g_enableSpam = !g_enableSpam; }
+    void onToggleStraight(CCObject*) { g_enableStraight = !g_enableStraight; }
+    void onToggleWave(CCObject*)     { g_enableWave = !g_enableWave; }
+    void onToggleSave(CCObject*)     { g_enableSave = !g_enableSave; }
 
     void onClose(CCObject*) {
         this->removeFromParentAndCleanup(true);
     }
 
-    void keyBackClicked() override {
-        this->onClose(nullptr);
+    void keyBackClicked() override { this->onClose(nullptr); }
+    bool ccTouchBegan(CCTouch*, CCEvent*) override { return true; }
+};
+
+// ===================== BOLITA ARRASTRABLE =====================
+class DraggableCK : public CCNode {
+public:
+    static DraggableCK* create(CCObject* target, SEL_MenuHandler callback) {
+        auto ret = new DraggableCK();
+        if (ret && ret->init(target, callback)) {
+            ret->autorelease();
+            return ret;
+        }
+        CC_SAFE_DELETE(ret);
+        return nullptr;
     }
 
-    bool ccTouchBegan(CCTouch*, CCEvent*) override {
+    bool init(CCObject* target, SEL_MenuHandler callback) {
+        if (!CCNode::init()) return false;
+
+        this->setContentSize({50.f, 50.f});
+        this->setAnchorPoint({0.5f, 0.5f});
+
+        auto dot = CCDrawNode::create();
+        dot->setPosition({25.f, 25.f});
+        dot->drawDot({0.f, 0.f}, 22.f, {0.f, 0.95f, 1.f, 1.f});
+        dot->drawDot({0.f, 0.f}, 18.f, {0.05f, 0.08f, 0.32f, 0.95f});
+        this->addChild(dot);
+
+        auto lbl = CCLabelBMFont::create("CK", "bigFont.fnt");
+        lbl->setScale(0.40f);
+        lbl->setPosition({25.f, 25.f});
+        lbl->setColor({0, 255, 255});
+        this->addChild(lbl);
+
+        auto btn = CCMenuItemSpriteExtra::create(
+            CCNode::create(),
+            target, callback
+        );
+        btn->setContentSize({50.f, 50.f});
+        btn->setPosition({25.f, 25.f});
+
+        auto menu = CCMenu::create();
+        menu->setPosition({0.f, 0.f});
+        menu->addChild(btn);
+        this->addChild(menu);
+
+        this->setTouchEnabled(true);
+        this->setTouchMode(kCCTouchesOneByOne);
+
+        m_dragging = false;
         return true;
     }
 
+    bool ccTouchBegan(CCTouch* touch, CCEvent* event) override {
+        auto pos = this->convertToNodeSpace(touch->getLocation());
+        auto size = this->getContentSize();
+
+        if (pos.x >= 0 && pos.x <= size.width && pos.y >= 0 && pos.y <= size.height) {
+            m_dragging = true;
+            m_lastPos = touch->getLocation();
+            return true;
+        }
+        return false;
+    }
+
+    void ccTouchMoved(CCTouch* touch, CCEvent* event) override {
+        if (!m_dragging) return;
+
+        auto current = touch->getLocation();
+        auto diff = current - m_lastPos;
+        this->setPosition(this->getPosition() + diff);
+        m_lastPos = current;
+    }
+
+    void ccTouchEnded(CCTouch* touch, CCEvent* event) override {
+        m_dragging = false;
+    }
+
+    void ccTouchCancelled(CCTouch* touch, CCEvent* event) override {
+        m_dragging = false;
+    }
+
 private:
-    CCScale9Sprite* m_panel = nullptr;
+    bool m_dragging = false;
+    CCPoint m_lastPos;
 };
 
-// ===================== SPAM LOGIC =====================
+// ===================== MENÚ PRINCIPAL =====================
+class $modify(CKMenuLayer, MenuLayer) {
+    bool init() {
+        if (!MenuLayer::init()) return false;
+
+        auto win = CCDirector::get()->getWinSize();
+
+        auto btn = DraggableCK::create(this, menu_selector(CKMenuLayer::onCK));
+        btn->setPosition({win.width - 40.f, win.height - 100.f});
+        this->addChild(btn, 100);
+
+        return true;
+    }
+
+    void onCK(CCObject*) {
+        auto scene = CCDirector::get()->getRunningScene();
+        if (!scene || scene->getChildByTag(98765)) return;
+
+        auto panel = CKPanel::create();
+        panel->setTag(98765);
+        scene->addChild(panel, 999);
+    }
+};
+
+// ===================== LÓGICA DE SPAM =====================
 class $modify(SpamGJBGL, GJBaseGameLayer) {
     struct Fields {
         std::deque<double> clicks;
@@ -229,7 +293,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 
         auto pl = isPlayer1 ? m_player1 : m_player2;
 
-        if (down && pl && pl->m_isShip &&
+        if (down && pl && pl->m_isShip && g_enableStraight &&
             Mod::get()->getSettingValue<bool>("straightfly")) {
             f->mode = 2;
             f->p1 = isPlayer1;
@@ -239,7 +303,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
             return;
         }
 
-        if (down) {
+        if (down && g_enableSpam) {
             auto window = Mod::get()->getSettingValue<double>("window");
             auto threshold = Mod::get()->getSettingValue<int64_t>("threshold");
 
@@ -281,7 +345,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
             } else if (f->mode == 2) {
                 auto flylook = Mod::get()->getSettingValue<double>("flylook");
                 this->setHeld(this->wantsUp(pl, flylook));
-            } else if (pl && pl->m_isDart) {
+            } else if (pl && pl->m_isDart && g_enableWave) {
                 auto n = (int)Mod::get()->getSettingValue<int64_t>("waveticks");
                 if (n < 1) n = 1;
                 f->waveCount++;
@@ -289,7 +353,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
                     f->waveCount = 0;
                     this->setHeld(!f->held);
                 }
-            } else {
+            } else if (g_enableSpam) {
                 auto cps = (double)Mod::get()->getSettingValue<int64_t>("cps");
                 auto stabilize = Mod::get()->getSettingValue<bool>("stabilize");
                 auto look = Mod::get()->getSettingValue<double>("lookahead");
@@ -312,71 +376,41 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
     }
 };
 
-// ===================== BOLITA CK =====================
-class $modify(CKUILayer, UILayer) {
-    struct Fields {
-        CCDrawNode* dot = nullptr;
-        CCLabelBMFont* lbl = nullptr;
-    };
-
-    void refreshCK() {
-        auto f = m_fields.self();
-        if (!f->dot) return;
-
-        f->dot->clear();
-        ccColor4F ring = g_ckOn ? ccColor4F{0.f, 0.95f, 1.f, 1.f} : ccColor4F{0.4f, 0.4f, 0.4f, 1.f};
-        ccColor4F fill = g_ckOn ? ccColor4F{0.05f, 0.1f, 0.35f, 0.95f} : ccColor4F{0.12f, 0.12f, 0.12f, 0.95f};
-
-        f->dot->drawDot({0.f, 0.f}, 22.f, ring);
-        f->dot->drawDot({0.f, 0.f}, 18.5f, fill);
-
-        if (f->lbl) {
-            f->lbl->setColor(g_ckOn ? ccc3(0, 255, 255) : ccc3(140, 140, 140));
+// ===================== SAVE MODE =====================
+class $modify(SavePlayer, PlayerObject) {
+    void playerDestroyed(bool p0) {
+        if (g_ckOn && g_enableSave) {
+            double now = nowSec();
+            if (now - g_lastSaveTime > SAVE_COOLDOWN) {
+                g_lastSaveTime = now;
+                return; // salva esta muerte
+            }
         }
+        PlayerObject::playerDestroyed(p0);
     }
+};
 
-    void onCK(CCObject*) {
-        auto scene = CCDirector::get()->getRunningScene();
-        if (!scene) return;
-
-        // Evitar abrir varios paneles
-        if (scene->getChildByTag(98765)) return;
-
-        auto panel = CKPanel::create();
-        panel->setTag(98765);
-        scene->addChild(panel, 999);
-    }
-
+// ===================== BOLITA DENTRO DEL NIVEL =====================
+class $modify(CKUILayer, UILayer) {
     bool init(GJBaseGameLayer* layer) {
         if (!UILayer::init(layer)) return false;
         if (!typeinfo_cast<PlayLayer*>(layer)) return true;
 
-        auto f = m_fields.self();
         auto win = CCDirector::get()->getWinSize();
 
-        auto node = CCNode::create();
-        node->setContentSize({48.f, 48.f});
+        auto btn = DraggableCK::create(this, menu_selector(CKUILayer::onCK));
+        btn->setPosition({win.width - 40.f, win.height - 115.f});
+        this->addChild(btn, 200);
 
-        f->dot = CCDrawNode::create();
-        f->dot->setPosition({24.f, 24.f});
-        node->addChild(f->dot);
-
-        f->lbl = CCLabelBMFont::create("CK", "bigFont.fnt");
-        f->lbl->setScale(0.4f);
-        f->lbl->setPosition({24.f, 24.f});
-        node->addChild(f->lbl);
-
-        auto btn = CCMenuItemSpriteExtra::create(
-            node, this, menu_selector(CKUILayer::onCK)
-        );
-        btn->setPosition({win.width - 36.f, win.height - 110.f});
-
-        auto menu = CCMenu::create();
-        menu->setPosition({0.f, 0.f});
-        menu->addChild(btn);
-        this->addChild(menu, 200);
-
-        this->refreshCK();
         return true;
+    }
+
+    void onCK(CCObject*) {
+        auto scene = CCDirector::get()->getRunningScene();
+        if (!scene || scene->getChildByTag(98765)) return;
+
+        auto panel = CKPanel::create();
+        panel->setTag(98765);
+        scene->addChild(panel, 999);
     }
 };
