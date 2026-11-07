@@ -42,40 +42,50 @@ public:
 
         auto win = CCDirector::get()->getWinSize();
 
-        auto dim = CCLayerColor::create({0, 0, 0, 160});
+        // Fondo oscuro
+        auto dim = CCLayerColor::create({0, 0, 0, 170});
         dim->setContentSize(win);
         this->addChild(dim);
 
+        // Panel principal
         auto panel = CCScale9Sprite::create("GJ_square02.png");
-        panel->setContentSize({340.f, 430.f});
+        panel->setContentSize({360.f, 440.f});
         panel->setPosition(win / 2);
-        panel->setColor({18, 18, 35});
-        panel->setOpacity(245);
+        panel->setColor({15, 15, 30});
+        panel->setOpacity(250);
         this->addChild(panel);
 
+        // Barra superior de color
+        auto topBar = CCLayerColor::create({0, 180, 255, 255});
+        topBar->setContentSize({360.f, 8.f});
+        topBar->setPosition({0.f, 432.f});
+        panel->addChild(topBar);
+
+        // Título
         auto title = CCLabelBMFont::create("STABLE SPAM - CK", "bigFont.fnt");
-        title->setScale(0.52f);
-        title->setPosition({170.f, 395.f});
+        title->setScale(0.55f);
+        title->setPosition({180.f, 400.f});
         title->setColor({0, 255, 255});
         panel->addChild(title);
 
-        auto line = CCLayerColor::create({0, 200, 255, 90});
-        line->setContentSize({300.f, 1.5f});
-        line->setPosition({20.f, 370.f});
+        // Línea
+        auto line = CCLayerColor::create({0, 180, 255, 100});
+        line->setContentSize({320.f, 1.5f});
+        line->setPosition({20.f, 375.f});
         panel->addChild(line);
 
         auto makeToggle = [&](const char* text, float y, bool* state, SEL_MenuHandler sel) {
             auto lab = CCLabelBMFont::create(text, "goldFont.fnt");
-            lab->setScale(0.40f);
+            lab->setScale(0.42f);
             lab->setAnchorPoint({0.f, 0.5f});
-            lab->setPosition({30.f, y});
+            lab->setPosition({28.f, y});
             panel->addChild(lab);
 
             auto on  = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
             auto off = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
             auto tog = CCMenuItemToggler::create(off, on, this, sel);
-            tog->setScale(0.85f);
-            tog->setPosition({295.f, y});
+            tog->setScale(0.9f);
+            tog->setPosition({310.f, y});
             tog->toggle(*state);
             return tog;
         };
@@ -83,29 +93,33 @@ public:
         auto menu = CCMenu::create();
         menu->setPosition({0.f, 0.f});
 
-        menu->addChild(makeToggle("Mod activado",              335.f, &g_ckOn,           menu_selector(CKPanel::onToggleMain)));
-        menu->addChild(makeToggle("Spam estable",             290.f, &g_enableSpam,     menu_selector(CKPanel::onToggleSpam)));
-        menu->addChild(makeToggle("Straight Fly (nave)",      245.f, &g_enableStraight, menu_selector(CKPanel::onToggleStraight)));
-        menu->addChild(makeToggle("Spam Wave fino",           200.f, &g_enableWave,     menu_selector(CKPanel::onToggleWave)));
-        menu->addChild(makeToggle("Save Mode (casi inmortal)",155.f, &g_enableSave,     menu_selector(CKPanel::onToggleSave)));
-        menu->addChild(makeToggle("Unlock FPS (3000)",        110.f, &g_unlockFPS,      menu_selector(CKPanel::onToggleFPS)));
+        menu->addChild(makeToggle("Mod activado",               340.f, &g_ckOn,           menu_selector(CKPanel::onToggleMain)));
+        menu->addChild(makeToggle("Spam estable",              295.f, &g_enableSpam,     menu_selector(CKPanel::onToggleSpam)));
+        menu->addChild(makeToggle("Straight Fly (nave)",       250.f, &g_enableStraight, menu_selector(CKPanel::onToggleStraight)));
+        menu->addChild(makeToggle("Spam Wave fino",            205.f, &g_enableWave,     menu_selector(CKPanel::onToggleWave)));
+        menu->addChild(makeToggle("Save Mode (casi inmortal)", 160.f, &g_enableSave,     menu_selector(CKPanel::onToggleSave)));
+        menu->addChild(makeToggle("Unlock FPS (3000)",         115.f, &g_unlockFPS,      menu_selector(CKPanel::onToggleFPS)));
 
+        // Texto info
         auto info = CCLabelBMFont::create(
-            "Save Mode: casi imposible morir\nUnlock FPS: 3000 FPS (sin limite)",
+            "Save Mode: casi imposible morir\nUnlock FPS: 3000 FPS",
             "chatFont.fnt"
         );
-        info->setScale(0.45f);
+        info->setScale(0.48f);
         info->setAlignment(kCCTextAlignmentCenter);
-        info->setPosition({170.f, 50.f});
-        info->setColor({180, 180, 200});
+        info->setPosition({180.f, 55.f});
+        info->setColor({170, 170, 200});
         panel->addChild(info);
 
+        // ===== X GRANDE PARA MÓVIL =====
+        auto closeSpr = CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png");
+        closeSpr->setScale(1.25f); // más grande
+
         auto close = CCMenuItemSpriteExtra::create(
-            CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png"),
+            closeSpr,
             this, menu_selector(CKPanel::onClose)
         );
-        close->setPosition({310.f, 405.f});
-        close->setScale(0.8f);
+        close->setPosition({325.f, 410.f});
         menu->addChild(close);
 
         panel->addChild(menu);
@@ -121,10 +135,8 @@ public:
     void onToggleFPS(CCObject*) {
         g_unlockFPS = !g_unlockFPS;
         if (g_unlockFPS) {
-            // 3000 FPS
             CCDirector::get()->setAnimationInterval(1.0 / 3000.0);
         } else {
-            // Vuelve a 60 FPS
             CCDirector::get()->setAnimationInterval(1.0 / 60.0);
         }
     }
