@@ -8,16 +8,37 @@
 	},
 	"id": "palomopalomano.stable-spam",
 	"name": "Stable Spam",
-	"version": "v1.0.0",
+	"version": "v1.2.0",
 	"developer": "PalomoPaloMano",
-	"description": "Detecta cuando haces spam y lo convierte en un spam estable (~100 CPS).",
+	"description": "Spam estable a ~100 CPS y Straight Fly para la nave.",
 	"settings": {
 		"cps": {
 			"type": "int",
 			"name": "CPS objetivo",
+			"description": "Clicks por segundo cuando el spam o el straight fly están activos.",
 			"default": 100,
 			"min": 1,
 			"max": 240
+		},
+		"straightfly": {
+			"type": "bool",
+			"name": "Straight Fly (nave)",
+			"description": "En la nave, mantén presionado y se queda a la altura donde empezaste.",
+			"default": true
+		},
+		"stabilize": {
+			"type": "bool",
+			"name": "Estabilizar altura en spam (nave)",
+			"description": "Si haces spam en la nave, se mantiene a la altura donde empezaste.",
+			"default": true
+		},
+		"lookahead": {
+			"type": "float",
+			"name": "Anticipación",
+			"description": "Sube si la nave oscila; baja si reacciona tarde.",
+			"default": 4.0,
+			"min": 0.0,
+			"max": 20.0
 		},
 		"threshold": {
 			"type": "int",
