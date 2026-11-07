@@ -1,30 +1,29 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/UILayer.hpp>
-#include <Geode/binding/CCMenuItemToggler.hpp>
 #include <chrono>
 #include <deque>
 
 using namespace geode::prelude;
 
 static bool g_ckOn = true;
-static ccColor4B g_panelBgColor = {20, 20, 40, 230}; // color por defecto del panel
+static ccColor4B g_panelBgColor = {25, 25, 45, 235};
 
 static double nowSec() {
     using namespace std::chrono;
     return duration<double>(steady_clock::now().time_since_epoch()).count();
 }
 
-// ===================== PANEL DE CONFIGURACIÓN =====================
+// ===================== PANEL =====================
 class CKPanel : public CCLayer {
 public:
     static CKPanel* create() {
-        auto p = new CKPanel();
-        if (p && p->init()) {
-            p->autorelease();
-            return p;
+        auto ret = new CKPanel();
+        if (ret && ret->init()) {
+            ret->autorelease();
+            return ret;
         }
-        CC_SAFE_DELETE(p);
+        CC_SAFE_DELETE(ret);
         return nullptr;
     }
 
@@ -36,14 +35,14 @@ public:
 
         auto win = CCDirector::get()->getWinSize();
 
-        // Fondo semi-transparente que bloquea toques
-        auto bg = CCLayerColor::create({0, 0, 0, 160});
-        bg->setContentSize(win);
-        this->addChild(bg);
+        // Fondo oscuro
+        auto dim = CCLayerColor::create({0, 0, 0, 170});
+        dim->setContentSize(win);
+        this->addChild(dim);
 
-        // Panel principal
+        // Panel
         auto panel = CCScale9Sprite::create("GJ_square02.png");
-        panel->setContentSize({320.f, 380.f});
+        panel->setContentSize({300.f, 340.f});
         panel->setPosition(win / 2);
         panel->setColor({g_panelBgColor.r, g_panelBgColor.g, g_panelBgColor.b});
         panel->setOpacity(g_panelBgColor.a);
@@ -51,102 +50,95 @@ public:
         m_panel = panel;
 
         // Título
-        auto title = CCLabelBMFont::create("Stable Spam - CK", "bigFont.fnt");
-        title->setScale(0.55f);
-        title->setPosition({160.f, 340.f});
+        auto title = CCLabelBMFont::create("Stable Spam", "bigFont.fnt");
+        title->setScale(0.5f);
+        title->setPosition({150.f, 300.f});
         panel->addChild(title);
 
-        // ===== APARTADO 1: Activar / Desactivar =====
+        // --- Apartado 1: On/Off ---
         auto lab1 = CCLabelBMFont::create("1. Estado del mod", "goldFont.fnt");
-        lab1->setScale(0.4f);
-        lab1->setPosition({160.f, 290.f});
+        lab1->setScale(0.38f);
+        lab1->setPosition({150.f, 255.f});
         panel->addChild(lab1);
 
-        auto btnOnOff = CCMenuItemToggler::create(
-            CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png"),
-            CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png"),
-            this, menu_selector(CKPanel::onToggleMod)
-        );
-        btnOnOff->setPosition({160.f, 250.f});
-        btnOnOff->toggle(g_ckOn);
+        auto onSpr = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
+        auto offSpr = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
+        auto toggle = CCMenuItemToggler::create(offSpr, onSpr, this, menu_selector(CKPanel::onToggle));
+        toggle->setPosition({150.f, 215.f});
+        toggle->toggle(g_ckOn);
 
-        // ===== APARTADO 2: Color de fondo =====
+        // --- Apartado 2: Colores ---
         auto lab2 = CCLabelBMFont::create("2. Color del panel", "goldFont.fnt");
-        lab2->setScale(0.4f);
-        lab2->setPosition({160.f, 200.f});
+        lab2->setScale(0.38f);
+        lab2->setPosition({150.f, 170.f});
         panel->addChild(lab2);
 
-        // Botones de colores rápidos
-        auto colors = std::vector<ccColor3B>{
-            {20, 20, 40}, {40, 20, 60}, {20, 40, 30},
-            {60, 20, 20}, {30, 30, 50}, {10, 10, 10}
+        auto colorMenu = CCMenu::create();
+        colorMenu->setPosition({0.f, 0.f});
+
+        std::vector<ccColor3B> cols = {
+            {25, 25, 45}, {50, 20, 70}, {20, 45, 30},
+            {70, 20, 20}, {30, 30, 55}, {15, 15, 15}
         };
 
-        auto colorMenu = CCMenu::create();
-        colorMenu->setPosition({0, 0});
-
-        float startX = 60.f;
-        for (size_t i = 0; i < colors.size(); i++) {
-            auto spr = CCLayerColor::create({colors[i].r, colors[i].g, colors[i].b, 255}, 36, 36);
+        float x = 55.f;
+        for (size_t i = 0; i < cols.size(); ++i) {
+            auto spr = CCLayerColor::create(
+                {cols[i].r, cols[i].g, cols[i].b, 255}, 34.f, 34.f
+            );
             auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(CKPanel::onColor));
-            btn->setTag(i);
-            btn->setPosition({startX + i * 42.f, 155.f});
+            btn->setTag(static_cast<int>(i));
+            btn->setPosition({x + i * 40.f, 125.f});
             colorMenu->addChild(btn);
         }
         panel->addChild(colorMenu);
 
-        // ===== APARTADO 3: Info + Cerrar =====
+        // --- Apartado 3 ---
         auto lab3 = CCLabelBMFont::create("3. Info", "goldFont.fnt");
-        lab3->setScale(0.4f);
-        lab3->setPosition({160.f, 100.f});
+        lab3->setScale(0.38f);
+        lab3->setPosition({150.f, 80.f});
         panel->addChild(lab3);
 
         auto info = CCLabelBMFont::create(
-            "Spam estable + Straight Fly\nWave: linea fina (ticks=1)\nPractica solamente",
+            "Spam estable + Straight Fly\nWave fina (ticks = 1)\nSolo practica",
             "chatFont.fnt"
         );
-        info->setScale(0.55f);
+        info->setScale(0.5f);
         info->setAlignment(kCCTextAlignmentCenter);
-        info->setPosition({160.f, 60.f});
+        info->setPosition({150.f, 45.f});
         panel->addChild(info);
 
-        // Botón cerrar
-        auto closeBtn = CCMenuItemSpriteExtra::create(
+        // Cerrar
+        auto close = CCMenuItemSpriteExtra::create(
             CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png"),
             this, menu_selector(CKPanel::onClose)
         );
-        closeBtn->setPosition({290.f, 350.f});
+        close->setPosition({270.f, 310.f});
 
         auto menu = CCMenu::create();
-        menu->setPosition({0, 0});
-        menu->addChild(btnOnOff);
-        menu->addChild(closeBtn);
+        menu->setPosition({0.f, 0.f});
+        menu->addChild(toggle);
+        menu->addChild(close);
         panel->addChild(menu);
 
         return true;
     }
 
-    void onToggleMod(CCObject* sender) {
+    void onToggle(CCObject*) {
         g_ckOn = !g_ckOn;
-        // Notificar al UILayer para que refresque la bolita
-        if (auto layer = UILayer::get()) {
-            if (auto ck = typeinfo_cast<CKUILayer*>(layer)) {
-                ck->refreshCK();
-            }
-        }
     }
 
     void onColor(CCObject* sender) {
         auto btn = static_cast<CCMenuItemSpriteExtra*>(sender);
         int tag = btn->getTag();
 
-        std::vector<ccColor4B> colors = {
-            {20, 20, 40, 230}, {40, 20, 60, 230}, {20, 40, 30, 230},
-            {60, 20, 20, 230}, {30, 30, 50, 230}, {10, 10, 10, 230}
+        std::vector<ccColor4B> cols = {
+            {25, 25, 45, 235}, {50, 20, 70, 235}, {20, 45, 30, 235},
+            {70, 20, 20, 235}, {30, 30, 55, 235}, {15, 15, 15, 235}
         };
 
-        if (tag >= 0 && tag < (int)colors.size()) {
-            g_panelBgColor = colors[tag];
+        if (tag >= 0 && tag < (int)cols.size()) {
+            g_panelBgColor = cols[tag];
             if (m_panel) {
                 m_panel->setColor({g_panelBgColor.r, g_panelBgColor.g, g_panelBgColor.b});
                 m_panel->setOpacity(g_panelBgColor.a);
@@ -155,25 +147,26 @@ public:
     }
 
     void onClose(CCObject*) {
-        this->removeFromParent();
+        this->removeFromParentAndCleanup(true);
     }
 
     void keyBackClicked() override {
         this->onClose(nullptr);
     }
 
-    // Bloquear toques al fondo
-    bool ccTouchBegan(CCTouch*, CCEvent*) override { return true; }
+    bool ccTouchBegan(CCTouch*, CCEvent*) override {
+        return true;
+    }
 
 private:
     CCScale9Sprite* m_panel = nullptr;
 };
 
-// ===================== LÓGICA DE SPAM =====================
+// ===================== SPAM LOGIC =====================
 class $modify(SpamGJBGL, GJBaseGameLayer) {
     struct Fields {
         std::deque<double> clicks;
-        int mode = 0; // 0 = apagado, 1 = spam, 2 = straight fly
+        int mode = 0;
         bool held = false;
         bool p1 = true;
         double lastReal = 0.0;
@@ -236,7 +229,6 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 
         auto pl = isPlayer1 ? m_player1 : m_player2;
 
-        // Straight fly
         if (down && pl && pl->m_isShip &&
             Mod::get()->getSettingValue<bool>("straightfly")) {
             f->mode = 2;
@@ -247,7 +239,6 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
             return;
         }
 
-        // Detección de spam
         if (down) {
             auto window = Mod::get()->getSettingValue<double>("window");
             auto threshold = Mod::get()->getSettingValue<int64_t>("threshold");
@@ -291,7 +282,6 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
                 auto flylook = Mod::get()->getSettingValue<double>("flylook");
                 this->setHeld(this->wantsUp(pl, flylook));
             } else if (pl && pl->m_isDart) {
-                // Wave más fino: cambia cada 1 tick por defecto
                 auto n = (int)Mod::get()->getSettingValue<int64_t>("waveticks");
                 if (n < 1) n = 1;
                 f->waveCount++;
@@ -325,7 +315,6 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 // ===================== BOLITA CK =====================
 class $modify(CKUILayer, UILayer) {
     struct Fields {
-        CCNode* ckNode = nullptr;
         CCDrawNode* dot = nullptr;
         CCLabelBMFont* lbl = nullptr;
     };
@@ -335,28 +324,27 @@ class $modify(CKUILayer, UILayer) {
         if (!f->dot) return;
 
         f->dot->clear();
-        ccColor4F ring = g_ckOn ? ccColor4F{0.f, 0.95f, 1.f, 1.f}
-                                : ccColor4F{0.45f, 0.45f, 0.45f, 1.f};
-        ccColor4F fill = g_ckOn ? ccColor4F{0.05f, 0.08f, 0.35f, 0.95f}
-                                : ccColor4F{0.12f, 0.12f, 0.12f, 0.95f};
+        ccColor4F ring = g_ckOn ? ccColor4F{0.f, 0.95f, 1.f, 1.f} : ccColor4F{0.4f, 0.4f, 0.4f, 1.f};
+        ccColor4F fill = g_ckOn ? ccColor4F{0.05f, 0.1f, 0.35f, 0.95f} : ccColor4F{0.12f, 0.12f, 0.12f, 0.95f};
 
         f->dot->drawDot({0.f, 0.f}, 22.f, ring);
         f->dot->drawDot({0.f, 0.f}, 18.5f, fill);
 
         if (f->lbl) {
-            f->lbl->setColor(g_ckOn ? ccColor3B{0, 255, 255} : ccColor3B{140, 140, 140});
+            f->lbl->setColor(g_ckOn ? ccc3(0, 255, 255) : ccc3(140, 140, 140));
         }
     }
 
     void onCK(CCObject*) {
-        // Abrir panel
-        if (auto scene = CCDirector::get()->getRunningScene()) {
-            if (!scene->getChildByName("CKPanel")) {
-                auto panel = CKPanel::create();
-                panel->setName("CKPanel");
-                scene->addChild(panel, 999);
-            }
-        }
+        auto scene = CCDirector::get()->getRunningScene();
+        if (!scene) return;
+
+        // Evitar abrir varios paneles
+        if (scene->getChildByTag(98765)) return;
+
+        auto panel = CKPanel::create();
+        panel->setTag(98765);
+        scene->addChild(panel, 999);
     }
 
     bool init(GJBaseGameLayer* layer) {
@@ -366,31 +354,27 @@ class $modify(CKUILayer, UILayer) {
         auto f = m_fields.self();
         auto win = CCDirector::get()->getWinSize();
 
-        // Nodo contenedor más grande para que se vea bien
         auto node = CCNode::create();
-        node->setContentSize({50.f, 50.f});
-        f->ckNode = node;
+        node->setContentSize({48.f, 48.f});
 
         f->dot = CCDrawNode::create();
-        f->dot->setPosition({25.f, 25.f});
+        f->dot->setPosition({24.f, 24.f});
         node->addChild(f->dot);
 
         f->lbl = CCLabelBMFont::create("CK", "bigFont.fnt");
-        f->lbl->setScale(0.42f);
-        f->lbl->setPosition({25.f, 25.f});
+        f->lbl->setScale(0.4f);
+        f->lbl->setPosition({24.f, 24.f});
         node->addChild(f->lbl);
 
         auto btn = CCMenuItemSpriteExtra::create(
             node, this, menu_selector(CKUILayer::onCK)
         );
-
-        // Posición más segura (derecha, un poco más abajo del botón de pause)
-        btn->setPosition({win.width - 38.f, win.height - 115.f});
+        btn->setPosition({win.width - 36.f, win.height - 110.f});
 
         auto menu = CCMenu::create();
         menu->setPosition({0.f, 0.f});
         menu->addChild(btn);
-        this->addChild(menu, 150); // z-order alto
+        this->addChild(menu, 200);
 
         this->refreshCK();
         return true;
