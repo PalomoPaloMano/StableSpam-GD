@@ -118,8 +118,8 @@ public:
     bool ccTouchBegan(CCTouch*, CCEvent*) override { return true; }
 };
 
-// ===================== BOLITA ARRASTRABLE =====================
-class DraggableCK : public CCNode {
+// ===================== BOLITA ARRASTRABLE (versión simple y compatible) =====================
+class DraggableCK : public CCLayer {
 public:
     static DraggableCK* create(CCObject* target, SEL_MenuHandler callback) {
         auto ret = new DraggableCK();
@@ -132,10 +132,11 @@ public:
     }
 
     bool init(CCObject* target, SEL_MenuHandler callback) {
-        if (!CCNode::init()) return false;
+        if (!CCLayer::init()) return false;
 
         this->setContentSize({50.f, 50.f});
         this->setAnchorPoint({0.5f, 0.5f});
+        this->ignoreAnchorPointForPosition(false);
 
         // Dibujo de la bolita
         auto dot = CCDrawNode::create();
@@ -152,55 +153,53 @@ public:
 
         m_target = target;
         m_callback = callback;
+        m_dragging = false;
 
-        // Listener de toques moderno
-        auto listener = EventListenerTouchOneByOne::create();
-        listener->setSwallowTouches(true);
-
-        listener->onTouchBegan = [this](CCTouch* touch, CCEvent*) -> bool {
-            auto pos = this->convertToNodeSpace(touch->getLocation());
-            auto size = this->getContentSize();
-
-            if (pos.x >= 0 && pos.x <= size.width && pos.y >= 0 && pos.y <= size.height) {
-                m_dragging = false;
-                m_startPos = touch->getLocation();
-                m_lastPos = m_startPos;
-                return true;
-            }
-            return false;
-        };
-
-        listener->onTouchMoved = [this](CCTouch* touch, CCEvent*) {
-            auto current = touch->getLocation();
-            auto diff = current - m_lastPos;
-
-            if (!m_dragging) {
-                auto totalDiff = current - m_startPos;
-                if (totalDiff.getLength() > 8.f) {
-                    m_dragging = true;
-                }
-            }
-
-            if (m_dragging) {
-                this->setPosition(this->getPosition() + diff);
-            }
-            m_lastPos = current;
-        };
-
-        listener->onTouchEnded = [this](CCTouch* touch, CCEvent*) {
-            if (!m_dragging && m_target && m_callback) {
-                (m_target->*m_callback)(nullptr);
-            }
-            m_dragging = false;
-        };
-
-        listener->onTouchCancelled = [this](CCTouch* touch, CCEvent*) {
-            m_dragging = false;
-        };
-
-        this->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, this);
+        this->setTouchEnabled(true);
+        this->setTouchMode(kCCTouchesOneByOne);
 
         return true;
+    }
+
+    bool ccTouchBegan(CCTouch* touch, CCEvent* event) override {
+        auto pos = this->convertToNodeSpace(touch->getLocation());
+        auto size = this->getContentSize();
+
+        if (pos.x >= 0 && pos.x <= size.width && pos.y >= 0 && pos.y <= size.height) {
+            m_dragging = false;
+            m_startPos = touch->getLocation();
+            m_lastPos = m_startPos;
+            return true;
+        }
+        return false;
+    }
+
+    void ccTouchMoved(CCTouch* touch, CCEvent* event) override {
+        auto current = touch->getLocation();
+        auto diff = current - m_lastPos;
+
+        if (!m_dragging) {
+            auto total = current - m_startPos;
+            if (ccpLength(total) > 8.f) {
+                m_dragging = true;
+            }
+        }
+
+        if (m_dragging) {
+            this->setPosition(this->getPosition() + diff);
+        }
+        m_lastPos = current;
+    }
+
+    void ccTouchEnded(CCTouch* touch, CCEvent* event) override {
+        if (!m_dragging && m_target && m_callback) {
+            (m_target->*m_callback)(nullptr);
+        }
+        m_dragging = false;
+    }
+
+    void ccTouchCancelled(CCTouch* touch, CCEvent* event) override {
+        m_dragging = false;
     }
 
 private:
@@ -392,7 +391,7 @@ class $modify(SavePlayer, PlayerObject) {
             double now = nowSec();
             if (now - g_lastSaveTime > SAVE_COOLDOWN) {
                 g_lastSaveTime = now;
-                return; // salva esta muerte
+                return;
             }
         }
         PlayerObject::playerDestroyed(p0);
