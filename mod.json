@@ -1,6 +1,11 @@
 {
-	"geode": "5.0.0",
-	"gd": "*",
+	"geode": "5.10.1",
+	"gd": {
+		"win": "*",
+		"android": "*",
+		"mac": "*",
+		"ios": "*"
+	},
 	"id": "palomopalomano.stable-spam",
 	"name": "Stable Spam",
 	"version": "v1.0.0",
