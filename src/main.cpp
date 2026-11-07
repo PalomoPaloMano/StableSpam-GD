@@ -14,9 +14,7 @@ static bool g_enableSpam     = true;
 static bool g_enableStraight = true;
 static bool g_enableWave     = true;
 static bool g_enableSave     = false;
-
-static double g_lastSaveTime = 0.0;
-static const double SAVE_COOLDOWN = 1.5;
+static bool g_unlockFPS      = false;
 
 static double nowSec() {
     using namespace std::chrono;
@@ -44,33 +42,40 @@ public:
 
         auto win = CCDirector::get()->getWinSize();
 
-        auto dim = CCLayerColor::create({0, 0, 0, 180});
+        auto dim = CCLayerColor::create({0, 0, 0, 160});
         dim->setContentSize(win);
         this->addChild(dim);
 
         auto panel = CCScale9Sprite::create("GJ_square02.png");
-        panel->setContentSize({310.f, 380.f});
+        panel->setContentSize({340.f, 430.f});
         panel->setPosition(win / 2);
-        panel->setColor({25, 25, 50});
-        panel->setOpacity(240);
+        panel->setColor({18, 18, 35});
+        panel->setOpacity(245);
         this->addChild(panel);
 
-        auto title = CCLabelBMFont::create("Stable Spam - CK", "bigFont.fnt");
-        title->setScale(0.48f);
-        title->setPosition({155.f, 340.f});
+        auto title = CCLabelBMFont::create("STABLE SPAM - CK", "bigFont.fnt");
+        title->setScale(0.52f);
+        title->setPosition({170.f, 395.f});
+        title->setColor({0, 255, 255});
         panel->addChild(title);
+
+        auto line = CCLayerColor::create({0, 200, 255, 90});
+        line->setContentSize({300.f, 1.5f});
+        line->setPosition({20.f, 370.f});
+        panel->addChild(line);
 
         auto makeToggle = [&](const char* text, float y, bool* state, SEL_MenuHandler sel) {
             auto lab = CCLabelBMFont::create(text, "goldFont.fnt");
-            lab->setScale(0.38f);
+            lab->setScale(0.40f);
             lab->setAnchorPoint({0.f, 0.5f});
-            lab->setPosition({35.f, y});
+            lab->setPosition({30.f, y});
             panel->addChild(lab);
 
             auto on  = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
             auto off = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
             auto tog = CCMenuItemToggler::create(off, on, this, sel);
-            tog->setPosition({260.f, y});
+            tog->setScale(0.85f);
+            tog->setPosition({295.f, y});
             tog->toggle(*state);
             return tog;
         };
@@ -78,26 +83,29 @@ public:
         auto menu = CCMenu::create();
         menu->setPosition({0.f, 0.f});
 
-        menu->addChild(makeToggle("Mod activado",            290.f, &g_ckOn,           menu_selector(CKPanel::onToggleMain)));
-        menu->addChild(makeToggle("Spam estable",           245.f, &g_enableSpam,     menu_selector(CKPanel::onToggleSpam)));
-        menu->addChild(makeToggle("Straight Fly (nave)",    200.f, &g_enableStraight, menu_selector(CKPanel::onToggleStraight)));
-        menu->addChild(makeToggle("Spam Wave fino",         155.f, &g_enableWave,     menu_selector(CKPanel::onToggleWave)));
-        menu->addChild(makeToggle("Save Mode (anti-muerte)",110.f, &g_enableSave,     menu_selector(CKPanel::onToggleSave)));
+        menu->addChild(makeToggle("Mod activado",              335.f, &g_ckOn,           menu_selector(CKPanel::onToggleMain)));
+        menu->addChild(makeToggle("Spam estable",             290.f, &g_enableSpam,     menu_selector(CKPanel::onToggleSpam)));
+        menu->addChild(makeToggle("Straight Fly (nave)",      245.f, &g_enableStraight, menu_selector(CKPanel::onToggleStraight)));
+        menu->addChild(makeToggle("Spam Wave fino",           200.f, &g_enableWave,     menu_selector(CKPanel::onToggleWave)));
+        menu->addChild(makeToggle("Save Mode (casi inmortal)",155.f, &g_enableSave,     menu_selector(CKPanel::onToggleSave)));
+        menu->addChild(makeToggle("Unlock FPS (3000)",        110.f, &g_unlockFPS,      menu_selector(CKPanel::onToggleFPS)));
 
         auto info = CCLabelBMFont::create(
-            "Save Mode: te salva si fallas\npor poco (cooldown 1.5s)\nSolo para practicar",
+            "Save Mode: casi imposible morir\nUnlock FPS: 3000 FPS (sin limite)",
             "chatFont.fnt"
         );
-        info->setScale(0.48f);
+        info->setScale(0.45f);
         info->setAlignment(kCCTextAlignmentCenter);
-        info->setPosition({155.f, 55.f});
+        info->setPosition({170.f, 50.f});
+        info->setColor({180, 180, 200});
         panel->addChild(info);
 
         auto close = CCMenuItemSpriteExtra::create(
             CCSprite::createWithSpriteFrameName("GJ_closeBtn_001.png"),
             this, menu_selector(CKPanel::onClose)
         );
-        close->setPosition({280.f, 350.f});
+        close->setPosition({310.f, 405.f});
+        close->setScale(0.8f);
         menu->addChild(close);
 
         panel->addChild(menu);
@@ -110,6 +118,17 @@ public:
     void onToggleWave(CCObject*)     { g_enableWave = !g_enableWave; }
     void onToggleSave(CCObject*)     { g_enableSave = !g_enableSave; }
 
+    void onToggleFPS(CCObject*) {
+        g_unlockFPS = !g_unlockFPS;
+        if (g_unlockFPS) {
+            // 3000 FPS
+            CCDirector::get()->setAnimationInterval(1.0 / 3000.0);
+        } else {
+            // Vuelve a 60 FPS
+            CCDirector::get()->setAnimationInterval(1.0 / 60.0);
+        }
+    }
+
     void onClose(CCObject*) {
         this->removeFromParentAndCleanup(true);
     }
@@ -118,7 +137,7 @@ public:
     bool ccTouchBegan(CCTouch*, CCEvent*) override { return true; }
 };
 
-// ===================== BOLITA ARRASTRABLE (versión simple y compatible) =====================
+// ===================== BOLITA ARRASTRABLE =====================
 class DraggableCK : public CCLayer {
 public:
     static DraggableCK* create(CCObject* target, SEL_MenuHandler callback) {
@@ -138,7 +157,6 @@ public:
         this->setAnchorPoint({0.5f, 0.5f});
         this->ignoreAnchorPointForPosition(false);
 
-        // Dibujo de la bolita
         auto dot = CCDrawNode::create();
         dot->setPosition({25.f, 25.f});
         dot->drawDot({0.f, 0.f}, 22.f, {0.f, 0.95f, 1.f, 1.f});
@@ -384,15 +402,11 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
     }
 };
 
-// ===================== SAVE MODE =====================
+// ===================== SAVE MODE FUERTE =====================
 class $modify(SavePlayer, PlayerObject) {
     void playerDestroyed(bool p0) {
         if (g_ckOn && g_enableSave) {
-            double now = nowSec();
-            if (now - g_lastSaveTime > SAVE_COOLDOWN) {
-                g_lastSaveTime = now;
-                return;
-            }
+            return; // casi inmortal
         }
         PlayerObject::playerDestroyed(p0);
     }
