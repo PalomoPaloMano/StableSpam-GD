@@ -22,6 +22,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		double lastReal = 0.0;
 		double acc = 0.0;
 		double targetY = 0.0;
+		int waveCount = 0;
 	};
 
 	PlayerObject* spamPlayer() {
@@ -48,6 +49,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 		this->setHeld(false);
 		f->mode = 0;
 		f->acc = 0.0;
+		f->waveCount = 0;
 		f->clicks.clear();
 	}
 
@@ -106,6 +108,7 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 				f->p1 = isPlayer1;
 				f->lastReal = now;
 				f->acc = 0.0;
+				f->waveCount = 0;
 				f->held = false;
 				if (pl) f->targetY = pl->getPositionY();
 			}
@@ -134,6 +137,14 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 				// Straight fly: decide en cada tick para ir recto
 				auto flylook = Mod::get()->getSettingValue<double>("flylook");
 				this->setHeld(this->wantsUp(pl, flylook));
+			} else if (pl && pl->m_isDart) {
+				// Wave: zigzag lo más fino posible, cambia cada N ticks
+				auto n = (int)Mod::get()->getSettingValue<int64_t>("waveticks");
+				f->waveCount++;
+				if (f->waveCount >= n) {
+					f->waveCount = 0;
+					this->setHeld(!f->held);
+				}
 			} else {
 				auto cps = (double)Mod::get()->getSettingValue<int64_t>("cps");
 				auto stabilize = Mod::get()->getSettingValue<bool>("stabilize");
@@ -147,7 +158,6 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
 					if (control) {
 						this->setHeld(this->wantsUp(pl, look));
 					} else {
-						// wave / cubo / etc: alterna -> zigzag estable
 						this->setHeld(!f->held);
 					}
 				}
