@@ -1,12 +1,7 @@
 {
-	"geode": "4.0.0",
-	"gd": {
-		"win": "2.2074",
-		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
-	},
-	"id": "user.stable-spam",
+	"geode": "5.0.0",
+	"gd": "*",
+	"id": "palomopalomano.stable-spam",
 	"name": "Stable Spam",
 	"version": "v1.0.0",
 	"developer": "PalomoPaloMano",
