@@ -202,4 +202,197 @@ class $modify(SpamGJBGL, GJBaseGameLayer) {
     }
 
     void stopSpam() {
-        auto f = m
+        auto f = m_fields.self();
+        this->setHeld(false);
+        f->mode = 0;
+        f->acc = 0.0;
+        f->waveCount = 0;
+        f->clicks.clear();
+    }
+
+    void handleButton(bool down, int button, bool isPlayer1) {
+        auto f = m_fields.self();
+
+        if (button != 1 || !PlayLayer::get()) {
+            return GJBaseGameLayer::handleButton(down, button, isPlayer1);
+        }
+
+        if (!g_ckOn) {
+            if (f->mode != 0) this->stopSpam();
+            return GJBaseGameLayer::handleButton(down, button, isPlayer1);
+        }
+
+        double now = nowSec();
+
+        if (f->mode == 2) {
+            if (!down && isPlayer1 == f->p1) this->stopSpam();
+            return;
+        }
+
+        if (f->mode == 1) {
+            f->lastReal = now;
+            return;
+        }
+
+        auto pl = isPlayer1 ? m_player1 : m_player2;
+
+        // Straight fly
+        if (down && pl && pl->m_isShip &&
+            Mod::get()->getSettingValue<bool>("straightfly")) {
+            f->mode = 2;
+            f->p1 = isPlayer1;
+            f->acc = 0.0;
+            f->held = false;
+            f->targetY = pl->getPositionY();
+            return;
+        }
+
+        // Detección de spam
+        if (down) {
+            auto window = Mod::get()->getSettingValue<double>("window");
+            auto threshold = Mod::get()->getSettingValue<int64_t>("threshold");
+
+            f->clicks.push_back(now);
+            while (!f->clicks.empty() && now - f->clicks.front() > window) {
+                f->clicks.pop_front();
+            }
+
+            if ((int64_t)f->clicks.size() >= threshold) {
+                f->mode = 1;
+                f->p1 = isPlayer1;
+                f->lastReal = now;
+                f->acc = 0.0;
+                f->waveCount = 0;
+                f->held = false;
+                if (pl) f->targetY = pl->getPositionY();
+            }
+        }
+
+        GJBaseGameLayer::handleButton(down, button, isPlayer1);
+    }
+
+    void processCommands(float dt, bool isHalfTick, bool isLastTick) {
+        auto f = m_fields.self();
+
+        if (f->mode != 0) {
+            double now = nowSec();
+            auto pl = this->spamPlayer();
+            bool stop = !PlayLayer::get() || !g_ckOn;
+
+            if (f->mode == 1) {
+                auto timeout = Mod::get()->getSettingValue<double>("timeout");
+                if (now - f->lastReal > timeout) stop = true;
+            }
+            if (f->mode == 2 && (!pl || !pl->m_isShip)) stop = true;
+
+            if (stop) {
+                this->stopSpam();
+            } else if (f->mode == 2) {
+                auto flylook = Mod::get()->getSettingValue<double>("flylook");
+                this->setHeld(this->wantsUp(pl, flylook));
+            } else if (pl && pl->m_isDart) {
+                // Wave más fino: cambia cada 1 tick por defecto
+                auto n = (int)Mod::get()->getSettingValue<int64_t>("waveticks");
+                if (n < 1) n = 1;
+                f->waveCount++;
+                if (f->waveCount >= n) {
+                    f->waveCount = 0;
+                    this->setHeld(!f->held);
+                }
+            } else {
+                auto cps = (double)Mod::get()->getSettingValue<int64_t>("cps");
+                auto stabilize = Mod::get()->getSettingValue<bool>("stabilize");
+                auto look = Mod::get()->getSettingValue<double>("lookahead");
+                double half = 0.5 / cps;
+                bool control = stabilize && pl && pl->m_isShip;
+
+                f->acc += dt;
+                while (f->acc >= half) {
+                    f->acc -= half;
+                    if (control) {
+                        this->setHeld(this->wantsUp(pl, look));
+                    } else {
+                        this->setHeld(!f->held);
+                    }
+                }
+            }
+        }
+
+        GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
+    }
+};
+
+// ===================== BOLITA CK =====================
+class $modify(CKUILayer, UILayer) {
+    struct Fields {
+        CCNode* ckNode = nullptr;
+        CCDrawNode* dot = nullptr;
+        CCLabelBMFont* lbl = nullptr;
+    };
+
+    void refreshCK() {
+        auto f = m_fields.self();
+        if (!f->dot) return;
+
+        f->dot->clear();
+        ccColor4F ring = g_ckOn ? ccColor4F{0.f, 0.95f, 1.f, 1.f}
+                                : ccColor4F{0.45f, 0.45f, 0.45f, 1.f};
+        ccColor4F fill = g_ckOn ? ccColor4F{0.05f, 0.08f, 0.35f, 0.95f}
+                                : ccColor4F{0.12f, 0.12f, 0.12f, 0.95f};
+
+        f->dot->drawDot({0.f, 0.f}, 22.f, ring);
+        f->dot->drawDot({0.f, 0.f}, 18.5f, fill);
+
+        if (f->lbl) {
+            f->lbl->setColor(g_ckOn ? ccColor3B{0, 255, 255} : ccColor3B{140, 140, 140});
+        }
+    }
+
+    void onCK(CCObject*) {
+        // Abrir panel
+        if (auto scene = CCDirector::get()->getRunningScene()) {
+            if (!scene->getChildByName("CKPanel")) {
+                auto panel = CKPanel::create();
+                panel->setName("CKPanel");
+                scene->addChild(panel, 999);
+            }
+        }
+    }
+
+    bool init(GJBaseGameLayer* layer) {
+        if (!UILayer::init(layer)) return false;
+        if (!typeinfo_cast<PlayLayer*>(layer)) return true;
+
+        auto f = m_fields.self();
+        auto win = CCDirector::get()->getWinSize();
+
+        // Nodo contenedor más grande para que se vea bien
+        auto node = CCNode::create();
+        node->setContentSize({50.f, 50.f});
+        f->ckNode = node;
+
+        f->dot = CCDrawNode::create();
+        f->dot->setPosition({25.f, 25.f});
+        node->addChild(f->dot);
+
+        f->lbl = CCLabelBMFont::create("CK", "bigFont.fnt");
+        f->lbl->setScale(0.42f);
+        f->lbl->setPosition({25.f, 25.f});
+        node->addChild(f->lbl);
+
+        auto btn = CCMenuItemSpriteExtra::create(
+            node, this, menu_selector(CKUILayer::onCK)
+        );
+
+        // Posición más segura (derecha, un poco más abajo del botón de pause)
+        btn->setPosition({win.width - 38.f, win.height - 115.f});
+
+        auto menu = CCMenu::create();
+        menu->setPosition({0.f, 0.f});
+        menu->addChild(btn);
+        this->addChild(menu, 150); // z-order alto
+
+        this->refreshCK();
+        return true;
+    }
+};
